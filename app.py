@@ -6,8 +6,8 @@ import subprocess
 
 # Function for adding watermark using FFmpeg system command
 def add_watermark(video_path, watermark_path, output_path, position):
-    command = f'ffmpeg -y -i {video_path} -i {watermark_path} -filter_complex "overlay={position}" -codec:a copy {output_path}'
-    subprocess.call(command, shell=True)
+    command = ['ffmpeg', '-y', '-i', video_path, '-i', watermark_path, '-filter_complex', f"overlay={position}", '-codec:a', 'copy', output_path]
+    subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 def main():
     st.title("Watermark Adder")
@@ -20,10 +20,10 @@ def main():
 
     # Position of the watermark
     position_options = {
+        'Bottom-right': 'main_w-overlay_w-10:main_h-overlay_h-10',
+        'Bottom-left': '10:main_h-overlay_h-10',
         'Top-left': '10:10',
         'Top-right': 'main_w-overlay_w-10:10',
-        'Bottom-left': '10:main_h-overlay_h-10',
-        'Bottom-right': 'main_w-overlay_w-10:main_h-overlay_h-10',
     }
     position = st.selectbox('Watermark Position', list(position_options.keys()))
 
@@ -51,7 +51,14 @@ def main():
                                         position_options[position])
 
                         # Display a link to download the output video
-                        st.markdown(f'### Download [here]({output_file.name})')
+                        with open(output_file.name, "rb") as file:
+                            bytes = file.read()
+                            st.download_button(
+                                label="Download watermarked video",
+                                data=bytes,
+                                file_name="watermarked_video.mp4",
+                                mime="video/mp4",
+                            )
 
         st.success('Watermarking completed.')
 
