@@ -8,6 +8,7 @@ import subprocess
 def add_watermark(video_path, watermark_path, output_path, position):
     command = ['ffmpeg', '-y', '-i', video_path, '-i', watermark_path, '-filter_complex', f"overlay={position}", '-codec:a', 'copy', output_path]
     subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return output_path  # Return the path of the output file
 
 def main():
     st.title("Watermark Adder")
@@ -33,32 +34,42 @@ def main():
     elif st.button('Start watermarking'):
         with st.spinner('Watermarking in progress...'):
             with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = []  # Store the futures from each watermarking process
                 for video in videos:
                     # Create temporary files for I/O
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as watermark_file, \
-                            tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as video_file, \
-                            tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as output_file:
+                    watermark_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    video_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+                    output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
 
-                        # Write the uploaded image and video to the temporary files
-                        watermark_file.write(watermark.getvalue())
-                        watermark_file.flush()
+                    # Write the uploaded image and video to the temporary files
+                    watermark_file.write(watermark.getvalue())
+                    watermark_file.flush()
+                    watermark_file.close()
 
-                        video_file.write(video.getvalue())
-                        video_file.flush()
+                    video_file.write(video.getvalue())
+                    video_file.flush()
+                    video_file.close()
 
-                        # Add watermark to the video
-                        executor.submit(add_watermark, video_file.name, watermark_file.name, output_file.name,
-                                        position_options[position])
+                    # Add watermark to the video and append the future to the list
+                    futures.append(executor.submit(add_watermark, video_file.name, watermark_file.name, output_file.name, position_options[position]))
 
-                        # Display a link to download the output video
-                        with open(output_file.name, "rb") as file:
-                            bytes = file.read()
-                            st.download_button(
-                                label="Download watermarked video",
-                                data=bytes,
-                                file_name="watermarked_video.mp4",
-                                mime="video/mp4",
-                            )
+                # Wait until all the processes are finished before continuing
+                executor.shutdown(wait=True)
+
+                # Loop over the completed futures and create a download button for each
+                for future in futures:
+                    output_path = future.result()  # Get the output path from the future
+                    with open(output_path, "rb") as file:
+                        bytes = file.read()
+                        st.download_button(
+                            label="Download watermarked video",
+                            data=bytes,
+                            file_name="watermarked_video.mp4",
+                            mime="video/mp4",
+                        )
+
+                    # Delete the temporary files after download
+                    os.unlink(output_path)
 
         st.success('Watermarking completed.')
 
